@@ -1,6 +1,16 @@
 import { NextResponse } from 'next/server';
 import { generateMicroLesson, LessonPlan } from '@/lib/gemini/service';
 
+function gcpLog(severity: 'INFO' | 'WARNING' | 'ERROR', message: string, data?: object) {
+  console.log(JSON.stringify({
+    severity,
+    message,
+    ...data,
+    timestamp: new Date().toISOString(),
+    service: 'adaptlearn-ai',
+  }));
+}
+
 // Simple in-memory rate limiting map
 // Maps UID -> last request timestamp
 const rateLimitStore = new Map<string, number>();
@@ -26,6 +36,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    gcpLog('INFO', 'Lesson generation started', { topic, learningStyle, userId: uid });
+
     // Retry Logic with Exponential Backoff
     let retryCount = 0;
     const MAX_RETRIES = 3;
@@ -35,20 +47,20 @@ export async function POST(req: Request) {
     while (retryCount < MAX_RETRIES) {
       try {
         lesson = await generateMicroLesson(topic, learningStyle, context);
+        gcpLog('INFO', 'Lesson generation succeeded', { topic });
         break; // Success
-      } catch (err: any) {
+      } catch (err: unknown) {
         lastError = err;
         retryCount++;
-        if (retryCount < MAX_RETRIES) {
-          // exponential backoff
-          await new Promise(res => setTimeout(res, Math.pow(2, retryCount) * 1000));
-        }
+        if (retryCount >= MAX_RETRIES) break;
+        await new Promise(res => setTimeout(res, 1000 * retryCount)); // Exponential backoff
       }
     }
 
     if (!lesson) {
         // Fallback content if API completely fails
         console.warn("Using fallback Gemini response due to failure:", lastError);
+        gcpLog('WARNING', 'Using fallback Gemini response due to failure', { topic, error: String(lastError) });
         lesson = {
             title: `Introduction to ${topic}`,
             conceptExplainer: `We are currently experiencing high traffic or AI service issues. However, ${topic} is an important concept. A standard explanation usually defines it as a core principle in its respective field. Please try regenerating the comprehensive, personalized lesson later.`,
@@ -63,9 +75,16 @@ export async function POST(req: Request) {
         }
     }
     
-    return NextResponse.json({ lesson });
-  } catch (error: any) {
+    return NextResponse.json({ lesson }, {
+      headers: {
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  } catch (error: unknown) {
+    gcpLog('ERROR', 'Lesson generation failed', { error: String(error) });
     console.error("API Route Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to generate lesson" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Failed to generate lesson";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

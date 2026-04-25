@@ -37,13 +37,18 @@ function LearnPageContent() {
       setError(null);
       setQuizState("idle");
       setSelectedOption(null);
-      const cacheKey = `lesson_${topic}_${context}`;
+      const cacheKey = `adaptlearn_lesson_${topic}_${context}`;
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
-        setLesson(JSON.parse(cached));
-        setLoading(false);
-        isFetchingRef.current = false;
-        return;
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < 30 * 60 * 1000) {
+          setLesson(data);
+          setLoading(false);
+          isFetchingRef.current = false;
+          return;
+        } else {
+          sessionStorage.removeItem(cacheKey);
+        }
       }
       
       const res = await fetch("/api/generate-lesson", {
@@ -60,10 +65,11 @@ function LearnPageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch adaptive lesson");
 
-      sessionStorage.setItem(cacheKey, JSON.stringify(data.lesson));
+      sessionStorage.setItem(cacheKey, JSON.stringify({ data: data.lesson, timestamp: Date.now() }));
       setLesson(data.lesson);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
     } finally {
       setLoading(false);
       isFetchingRef.current = false;
@@ -172,8 +178,8 @@ function LearnPageContent() {
       )}
 
       {loading && (
-        <Card className="min-h-[400px] flex flex-col items-center justify-center space-y-6 shadow-sm border-indigo-100 dark:border-indigo-900/50 animate-in fade-in duration-500">
-          <div className="p-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-full">
+        <Card aria-busy="true" aria-label="Generating your lesson..." className="min-h-[400px] flex flex-col items-center justify-center space-y-6 shadow-sm border-indigo-100 dark:border-indigo-900/50 animate-in fade-in duration-500">
+          <div className="p-6 bg-indigo-50 dark:bg-indigo-900/20 rounded-full" role="status" aria-live="polite">
             <Brain className="w-16 h-16 text-indigo-500 animate-pulse" />
           </div>
           <div className="text-center space-y-2">
@@ -241,6 +247,8 @@ function LearnPageContent() {
                       key={idx}
                       onClick={() => handleQuizAnswer(idx)}
                       disabled={quizState !== "idle"}
+                      aria-pressed={quizState === "answered" && selectedOption === idx}
+                      aria-label={`Option ${idx + 1}: ${option}`}
                       className={`p-5 rounded-xl text-left transition-all border-2 flex items-center justify-between group
                         ${quizState === "idle" ? "border-zinc-200 dark:border-zinc-800 hover:border-indigo-400 dark:hover:border-indigo-600 bg-white dark:bg-zinc-900 shadow-sm hover:shadow-md" : ""}
                         ${btnState === "correct" ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-900 dark:text-emerald-100 shadow-inner" : ""}

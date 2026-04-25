@@ -48,6 +48,14 @@ const responseSchema: ResponseSchema = {
   required: ["title", "conceptExplainer", "analogy", "realWorldExample", "quiz"]
 };
 
+/**
+ * Generates an adaptive lesson using Gemini AI.
+ * @param topic - The subject to generate a lesson for (e.g. "Java", "Python")
+ * @param learningStyle - Skill level or learning style
+ * @param context - Previous user performance context
+ * @returns A structured lesson object with content and quiz questions
+ * @throws Error if Gemini API is unreachable or quota exceeded
+ */
 export async function generateMicroLesson(topic: string, learningStyle: string, context: string = ""): Promise<LessonPlan> {
   if (!genAI) throw new Error("Gemini API key is not configured in environment variables.");
 

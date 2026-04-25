@@ -19,7 +19,15 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`${inter.className} min-h-screen bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 antialiased`}>
         <AuthProvider>
-          {children}
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-white focus:text-black focus:p-2 focus:rounded"
+          >
+            Skip to main content
+          </a>
+          <main id="main-content">
+            {children}
+          </main>
         </AuthProvider>
       </body>
     </html>
