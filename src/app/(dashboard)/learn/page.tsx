@@ -37,6 +37,14 @@ function LearnPageContent() {
       setError(null);
       setQuizState("idle");
       setSelectedOption(null);
+      const cacheKey = `lesson_${topic}_${context}`;
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        setLesson(JSON.parse(cached));
+        setLoading(false);
+        isFetchingRef.current = false;
+        return;
+      }
       
       const res = await fetch("/api/generate-lesson", {
         method: "POST",
@@ -52,6 +60,7 @@ function LearnPageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch adaptive lesson");
 
+      sessionStorage.setItem(cacheKey, JSON.stringify(data.lesson));
       setLesson(data.lesson);
     } catch (err: any) {
       setError(err.message);
