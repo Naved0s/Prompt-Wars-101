@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LessonPlan } from "@/lib/gemini/service";
 import { Loader2, Brain, CheckCircle, XCircle, ArrowRight, Lightbulb, Activity, Target } from "lucide-react";
-import { doc, updateDoc, increment } from "firebase/firestore";
+import { doc, getDoc, updateDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 
 function LearnPageContent() {
@@ -76,9 +76,29 @@ function LearnPageContent() {
     if (isCorrect) {
       try {
         const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        const currentData = userSnap.exists() ? userSnap.data() : null;
+        const newMastery = (currentData?.masteryPoints || 0) + 10;
+        
+        let newHistory = currentData?.history || [
+          { name: 'Start', mastery: 0 }
+        ];
+        
+        // Add new data point
+        newHistory.push({
+          name: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          mastery: newMastery
+        });
+        
+        // Keep only last 7 items for the chart
+        if (newHistory.length > 7) {
+          newHistory = newHistory.slice(newHistory.length - 7);
+        }
+
         await updateDoc(userRef, { 
-          masteryPoints: increment(10),
-          streak: increment(1) // Naive increment for demo purposes
+          masteryPoints: newMastery,
+          streak: increment(1),
+          history: newHistory
         });
       } catch (e) {
         console.error("Failed to update user mastery:", e);

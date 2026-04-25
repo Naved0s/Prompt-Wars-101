@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -8,16 +8,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Search, Flame, Target, Star, BrainCircuit, ArrowRight } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase/config";
 
-// Mock data for Recharts (until Firestore is implemented fully)
-const progressData = [
-  { name: 'Mon', mastery: 10 },
-  { name: 'Tue', mastery: 25 },
-  { name: 'Wed', mastery: 45 },
-  { name: 'Thu', mastery: 50 },
-  { name: 'Fri', mastery: 80 },
-  { name: 'Sat', mastery: 95 },
-  { name: 'Sun', mastery: 120 },
+// Default empty state for Recharts
+const defaultProgressData = [
+  { name: 'Mon', mastery: 0 },
+  { name: 'Tue', mastery: 0 },
+  { name: 'Wed', mastery: 0 },
+  { name: 'Thu', mastery: 0 },
+  { name: 'Fri', mastery: 0 },
+  { name: 'Sat', mastery: 0 },
+  { name: 'Sun', mastery: 0 },
 ];
 
 const PREDEFINED_TOPICS = [
@@ -32,6 +34,27 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [topic, setTopic] = useState("");
+  const [stats, setStats] = useState({ streak: 0, masteryPoints: 0 });
+  const [chartData, setChartData] = useState<{name: string, mastery: number}[]>(defaultProgressData);
+
+  useEffect(() => {
+    if (!user) return;
+    const userRef = doc(db, "users", user.uid);
+    const unsubscribe = onSnapshot(userRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setStats({
+          streak: data.streak || 0,
+          masteryPoints: data.masteryPoints || 0
+        });
+        
+        if (data.history && data.history.length > 0) {
+          setChartData(data.history);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [user]);
 
   const handleStartSession = (selectedTopic: string) => {
     if (!selectedTopic.trim()) return;
@@ -61,7 +84,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={progressData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+              <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" opacity={0.2} vertical={false} />
                 <XAxis dataKey="name" stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis stroke="#71717a" fontSize={12} tickLine={false} axisLine={false} />
@@ -85,7 +108,7 @@ export default function DashboardPage() {
               </div>
               <div>
                 <p className="text-sm font-medium text-amber-600 dark:text-amber-500">Current Streak</p>
-                <h3 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">3 Days</h3>
+                <h3 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">{stats.streak} {stats.streak === 1 ? 'Day' : 'Days'}</h3>
               </div>
             </CardContent>
           </Card>
@@ -97,7 +120,7 @@ export default function DashboardPage() {
               </div>
               <div>
                 <p className="text-sm font-medium text-emerald-600 dark:text-emerald-500">Total Mastery</p>
-                <h3 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">1,250 XP</h3>
+                <h3 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">{stats.masteryPoints.toLocaleString()} XP</h3>
               </div>
             </CardContent>
           </Card>
